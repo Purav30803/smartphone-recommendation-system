@@ -1,184 +1,254 @@
-import { useState, useEffect } from "react";
-import { Search, Sliders, ChevronDown } from "lucide-react";
-import "../app/global.css";
-import Link from "next/link";
+import React, { useState, useEffect } from "react";
+import { motion } from "framer-motion";
+import { 
+  Smartphone, 
+  Search, 
+  Filter, 
+  TrendingUp, 
+  Zap, 
+  Cpu, 
+  Camera, 
+  Battery 
+} from "lucide-react";
+import Navbar from "@/components/Navbar";
+import { useRouter } from "next/router";
+import axios from "axios";
+import "../styles/global.css";
 
-export default function Home() {
-  const [smartphones, setSmartphones] = useState([]);
-  const [showFilters, setShowFilters] = useState(false);
-  const [searchParams, setSearchParams] = useState({
+const Home = () => {
+  const router = useRouter();
+  const [filters, setFilters] = useState({
     brand: "",
-    memory: "",
+    priceRange: "",
     camera: "",
-    minBudget: "",
-    maxBudget: "",
+    storage: "",
+    operatingSystem: "",
+    display: "",
+    battery: "",
+    processor: "",
   });
+  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState([]);
+  const [searchHistory, setSearchHistory] = useState([]);
+  const [debounceTimer, setDebounceTimer] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Icons mapping for each filter
+  const filterIcons = {
+    brand: Smartphone,
+    priceRange: Filter,
+    camera: Camera,
+    storage: Battery,
+    operatingSystem: Zap,
+    display: Cpu,
+    battery: Battery,
+    processor: Cpu
+  };
+
+  // Placeholder suggestions for each filter
+  const filterPlaceholders = {
+    brand: "e.g., Apple, Samsung",
+    priceRange: "e.g., 500-1000",
+    camera: "e.g., 48MP",
+    storage: "e.g., 128GB",
+    operatingSystem: "e.g., Android, iOS",
+    display: "e.g., AMOLED, 6.5 inch",
+    battery: "e.g., 5000mAh",
+    processor: "e.g., Snapdragon 888"
+  };
 
   useEffect(() => {
-    // Fetch all smartphones on component mount
-    fetchSmartphones();
+    const fetchSearchHistory = async () => {
+      try {
+        setIsLoading(true);
+        const res = await axios.get("http://localhost:8080/api/smartphones/frequency");
+        setSearchHistory(
+          Object.entries(res.data)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+        );
+      } catch (err) {
+        console.error("Failed to fetch search history:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchSearchHistory();
   }, []);
 
-  const fetchSmartphones = async (query = "") => {
-    try {
-      const response = await fetch(
-        `http://127.0.0.1:8080/api/smartphones${query}`
-      );
-      if (!response.ok) throw new Error("Failed to fetch smartphones");
-      const data = await response.json();
-      setSmartphones(data);
-    } catch (error) {
-      console.error(error.message);
-      setSmartphones([]);
-    }
+  const handleBrandInput = (e) => {
+    const value = e.target.value;
+    setFilters((prevFilters) => ({ ...prevFilters, brand: value }));
+
+    if (debounceTimer) clearTimeout(debounceTimer);
+
+    const newTimer = setTimeout(async () => {
+      if (value) {
+        try {
+          const autocompleteRes = await axios.get(`http://localhost:8080/api/smartphones/autocomplete?prefix=${value}`);
+          setAutocompleteSuggestions(autocompleteRes.data);
+
+          const spellCheckRes = await axios.get(`http://localhost:8080/api/smartphones/spellcheck?query=${value}`);
+          const correctedBrand = spellCheckRes.data;
+
+          if (correctedBrand && correctedBrand.toLowerCase() !== value.toLowerCase()) {
+            setFilters((prevFilters) => ({ ...prevFilters, brand: correctedBrand }));
+          }
+        } catch (err) {
+          console.error("Autocomplete or spellcheck API error:", err);
+        }
+      } else {
+        setAutocompleteSuggestions([]);
+      }
+    }, 1500);
+
+    setDebounceTimer(newTimer);
   };
 
-  const handleSearch = () => {
-    // Build query string from searchParams
-    const query = new URLSearchParams(
-      Object.fromEntries(
-        Object.entries(searchParams).filter(([_, value]) => value.trim() !== "")
-      )
-    ).toString();
-    fetchSmartphones(query ? `?${query}` : "");
-  };
-
-  const handleChange = (e) => {
-    // Update search parameters and trigger search
+  const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    setSearchParams((prev) => ({ ...prev, [name]: value }));
+    setFilters((prevFilters) => ({ ...prevFilters, [name]: value }));
   };
 
-  useEffect(() => {
-    // Trigger search whenever searchParams change
-    handleSearch();
-  }, [searchParams]);
+  const handleRecommendation = () => {
+    const query = Object.keys(filters)
+      .filter((key) => filters[key]?.trim() !== "")
+      .map((key) => `${key}=${encodeURIComponent(filters[key].trim())}`)
+      .join("&");
+
+    router.push(`/recommendations?${query}`);
+  };
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <nav className="border-b border-gray-800">
-        <div className="container mx-auto px-6 py-4">
-          <h1 className="text-2xl font-semibold">Smartphone Finder</h1>
-        </div>
-      </nav>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100">
+      <Navbar />
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="container mx-auto px-4 py-8"
+      >
+        <motion.h1 
+          initial={{ x: -50, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          className="text-4xl font-extrabold text-gray-900 mb-8 flex items-center"
+        >
+          Find a Perfect Smartphone for you
+        </motion.h1>
 
-      <main className="container mx-auto px-6 py-12">
-        <div className="max-w-4xl mx-auto">
-          {/* Hero Section */}
-          <div className="text-center mb-16">
-            <h2 className="text-5xl font-bold mb-6">Find Your Perfect Phone</h2>
-            <p className="text-gray-400 text-xl">
-              Discover the smartphone that matches your lifestyle.
-            </p>
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          className="bg-white shadow-2xl rounded-2xl p-8 mb-8"
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {Object.keys(filters).map((filterKey) => {
+              const Icon = filterIcons[filterKey];
+              return (
+                <motion.div 
+                  key={filterKey}
+                  whileHover={{ scale: 1.05 }}
+                  transition={{ type: "spring", stiffness: 300 }}
+                >
+                  <label className="block text-sm font-medium text-gray-700 mb-2 capitalize">
+                    {filterKey.replace(/([A-Z])/g, ' $1').trim()}
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Icon className="h-5 w-5 text-blue-400" />
+                    </div>
+                    <input
+                      type="text"
+                      name={filterKey}
+                      placeholder={filterPlaceholders[filterKey]}
+                      value={filters[filterKey]}
+                      onChange={filterKey === "brand" ? handleBrandInput : handleFilterChange}
+                      className="pl-10 block w-full rounded-lg border-gray-300 shadow-sm outline-none text-black focus:border-blue-500 focus:ring focus:ring-blue-200 transition-all"
+                    />
+                  </div>
+                  {filterKey === "brand" && autocompleteSuggestions.length > 0 && (
+                    <motion.ul 
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="absolute z-10 bg-white border rounded-lg mt-1 w-full max-h-40 overflow-y-auto shadow-lg"
+                    >
+                      {autocompleteSuggestions.map((suggestion, index) => (
+                        <motion.li
+                          key={index}
+                          whileHover={{ backgroundColor: "#f3f4f6" }}
+                          className="p-2 cursor-pointer hover:bg-gray-100"
+                          onClick={() => {
+                            setFilters((prevFilters) => ({ ...prevFilters, brand: suggestion }));
+                            setAutocompleteSuggestions([]);
+                          }}
+                        >
+                          {suggestion}
+                        </motion.li>
+                      ))}
+                    </motion.ul>
+                  )}
+                </motion.div>
+              );
+            })}
           </div>
 
-          {/* Search Bar and Filters */}
-          <div className="bg-gray-900 rounded-2xl p-6 mb-12">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="flex-1 relative">
-                <input
-                  type="text"
-                  name="brand"
-                  placeholder="Search by brand, model, or features"
-                  value={searchParams.brand}
-                  onChange={handleChange}
-                  className="w-full bg-gray-800 text-white rounded-xl py-3 px-5 pl-12 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <Search
-                  className="absolute left-4 top-3.5 text-gray-400"
-                  size={20}
-                />
-              </div>
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center gap-2 bg-gray-800 px-4 py-3 rounded-xl hover:bg-gray-700 transition-colors"
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={handleRecommendation}
+            className="mt-6 w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-all flex items-center justify-center"
+          >
+            <Search className="mr-2" />
+            Find My Perfect Smartphone
+          </motion.button>
+        </motion.div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5 }}
+          className="bg-white shadow-xl rounded-2xl p-6"
+        >
+          <h3 className="text-2xl font-bold mb-4 flex items-center">
+            <TrendingUp className="mr-3 text-green-500" />
+            Top Searches
+          </h3>
+          
+          {isLoading ? (
+            <div className="flex justify-center items-center py-4">
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ 
+                  repeat: Infinity, 
+                  duration: 1, 
+                  ease: "linear" 
+                }}
               >
-                <Sliders size={20} />
-                Filters
-                <ChevronDown
-                  size={16}
-                  className={`transform transition-transform ${
-                    showFilters ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
+                <Smartphone className="text-blue-500" size={32} />
+              </motion.div>
             </div>
-
-            {/* Expandable Filters */}
-            {showFilters && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <select
-                  name="memory"
-                  value={searchParams.memory}
-                  onChange={handleChange}
-                  className="bg-gray-800 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          ) : (
+            <ul className="space-y-3">
+              {searchHistory.map(([query, frequency], index) => (
+                <motion.li 
+                  key={index}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  className="flex justify-between items-center border-b pb-3 last:border-b-0"
                 >
-                  <option value="">Storage</option>
-                  <option value="64GB">64GB</option>
-                  <option value="128GB">128GB</option>
-                  <option value="256GB">256GB</option>
-                  <option value="512GB">512GB</option>
-                </select>
-                <select
-                  name="camera"
-                  value={searchParams.camera}
-                  onChange={handleChange}
-                  className="bg-gray-800 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Camera</option>
-                  <option value="12MP">12MP+</option>
-                  <option value="48MP">48MP+</option>
-                  <option value="108MP">108MP+</option>
-                </select>
-                <input
-                  type="number"
-                  name="minBudget"
-                  placeholder="Min Price"
-                  value={searchParams.minBudget}
-                  onChange={handleChange}
-                  className="bg-gray-800 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <input
-                  type="number"
-                  name="maxBudget"
-                  placeholder="Max Price"
-                  value={searchParams.maxBudget}
-                  onChange={handleChange}
-                  className="bg-gray-800 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Results Grid */}
-{smartphones?.length === 0? <div>
-  <h1 className="text-2xl font-semibold text-center">No smartphones found</h1>
-</div>:          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {smartphones.map((phone) => (
-              <div
-                key={phone._id}
-                className="bg-gray-900 rounded-2xl p-6 hover:scale-105 transition-transform cursor-pointer"
-              >
-                <img
-                  src={phone.image}
-                  alt={phone.model}
-                  className="w-full h-48 object-cover rounded-xl mb-4"
-                />
-                <h3 className="text-xl font-semibold mb-2">{phone.model}</h3>
-                <p className="text-gray-400 mb-4">{phone.brand}</p>
-                <div className="flex justify-between items-center">
-                  <span className="text-2xl font-bold">${phone.price}</span>
-                  <Link href={`/phone/${phone._id}`}>
-                  <button className="bg-blue-500 text-white px-6 py-2 rounded-xl hover:bg-blue-600 transition-colors">
-                    Details
-                  </button>
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>}
-        </div>
-      </main>
+                  <span className="text-gray-700">{query}</span>
+                  <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                    {frequency} searches
+                  </span>
+                </motion.li>
+              ))}
+            </ul>
+          )}
+        </motion.div>
+      </motion.div>
     </div>
   );
-}
+};
+
+export default Home;
